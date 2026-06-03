@@ -15,3 +15,6 @@ __pycache__/
 tmp/
 *.tmp
 boundaries/
+
+# Local work tracking (never commit - public repo)
+.timesheet-log.md
