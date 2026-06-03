@@ -1,5 +1,7 @@
 # SIRS Compare
 
+**Live app: https://gfdrr.github.io/sirs-compare/**
+
 A lightweight public web app to compare **open** school-location datasets over high-resolution satellite imagery for five West African countries: **Niger, Guinea, Mali, Benin, and Ghana**.
 
 Pick a country, toggle data sources on and off, and zoom in to a school to eyeball whether each point actually sits on a real school building. It is a quick, visual way to gauge the completeness and accuracy of any one source before relying on it.
