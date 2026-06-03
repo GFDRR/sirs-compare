@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SIRS Compare - Open school-location sources</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script>
+// Test hook (?hiddenraf=1): drive rAF with timers so automated checks can
+// render the map in a hidden/background tab. No effect for normal visitors.
+if (new URLSearchParams(location.search).has("hiddenraf")) {
+  window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 33);
+  window.cancelAnimationFrame = (id) => clearTimeout(id);
+}
+</script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
   :root {
@@ -12,6 +20,7 @@
     --wb-accent: #009fda;
     --osm-color: #1b9e77;
     --overture-color: #d95f02;
+    --match-color: #18d0e8;
     --panel-bg: rgba(255, 255, 255, 0.97);
     --border: #d7dde3;
   }
@@ -37,33 +46,51 @@
     box-shadow: 0 2px 10px rgba(0,0,0,0.18);
     font-size: 13px;
   }
-  #controls { top: 92px; left: 14px; width: 248px; padding: 14px; }
+  #controls {
+    top: 92px; left: 14px; width: 264px; padding: 14px;
+    max-height: calc(100% - 120px); overflow-y: auto;
+  }
   #controls h2 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: #5a6b7b; }
+  #controls section { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  #controls section:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
 
   select {
     width: 100%; padding: 7px 8px; font-size: 14px;
     border: 1px solid var(--border); border-radius: 6px; background: #fff;
-    margin-bottom: 14px;
+    margin-bottom: 2px;
   }
+
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 4px; }
+  .seg button {
+    flex: 1; padding: 6px 4px; font-size: 12.5px; border: 0; background: #fff; cursor: pointer; color: #41525f;
+  }
+  .seg button.active { background: var(--wb-blue); color: #fff; font-weight: 600; }
 
   .layer-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; cursor: pointer; }
   .layer-row input { width: 15px; height: 15px; cursor: pointer; }
   .swatch { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,0.35); flex: 0 0 auto; }
+  .swatch.poly { border-radius: 3px; }
   .layer-row .lbl { flex: 1; }
   .layer-row .cnt { font-variant-numeric: tabular-nums; font-weight: 600; color: #2b3947; }
 
-  .stats { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-  .stats .delta { font-size: 12px; color: #5a6b7b; line-height: 1.5; }
+  .stats .delta { font-size: 12px; color: #41525f; line-height: 1.55; }
+  .stats .delta b { color: #1a2733; }
+  .stats .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .stats .kpi { background: #f2f6f9; border-radius: 6px; padding: 6px 8px; }
+  .stats .kpi .v { font-size: 15px; font-weight: 700; color: var(--wb-blue); font-variant-numeric: tabular-nums; }
+  .stats .kpi .k { font-size: 10.5px; color: #5a6b7b; text-transform: uppercase; letter-spacing: 0.4px; }
 
-  .basemap-toggle { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
   .basemap-toggle label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 
   #legend-hint { margin-top: 10px; font-size: 11.5px; color: #6a7b8b; line-height: 1.45; }
+  #legend-hint code { font-size: 10.5px; }
 
-  .maplibregl-popup-content { font-size: 13px; padding: 10px 12px; border-radius: 6px; }
+  .maplibregl-popup-content { font-size: 13px; padding: 10px 12px; border-radius: 6px; max-width: 280px; }
   .maplibregl-popup-content .pop-name { font-weight: 600; margin-bottom: 4px; font-size: 13.5px; }
   .maplibregl-popup-content .pop-src { display: inline-block; padding: 1px 7px; border-radius: 10px; color: #fff; font-size: 11px; font-weight: 600; }
-  .maplibregl-popup-content .pop-meta { color: #5a6b7b; margin-top: 5px; }
+  .maplibregl-popup-content .pop-meta { color: #5a6b7b; margin-top: 5px; line-height: 1.45; }
+  .maplibregl-popup-content .pop-match { margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: #ecfbfd; border: 1px solid #bfeef4; line-height: 1.45; }
+  .maplibregl-popup-content .pop-match.nomatch { background: #f6f7f8; border-color: var(--border); color: #5a6b7b; }
 
   #loading { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 6;
     background: rgba(0,34,68,0.9); color: #fff; padding: 6px 14px; border-radius: 16px; font-size: 12px; display: none; }
@@ -74,7 +101,7 @@
 
   @media (max-width: 640px) {
     header p { display: none; }
-    #controls { width: 210px; top: 70px; }
+    #controls { width: 224px; top: 70px; }
   }
 </style>
 </head>
@@ -84,56 +111,119 @@
 <header>
   <h1>SIRS Compare &middot; Open school-location sources</h1>
   <p>
-    Compare open school-location datasets over high-resolution satellite imagery for five West African countries.
-    Toggle sources on and off and zoom in to a school to eyeball whether each point sits on a real school building -
-    a quick way to gauge the completeness and accuracy of any one source before relying on it.
+    Compare and cross-match open school-location datasets over high-resolution satellite imagery for five
+    West African countries. Switch to the <b>Agreement</b> view to see which schools appear in both
+    OpenStreetMap and Overture Maps, which are unique to one source, and how well their names agree.
+    Toggle on building footprints and school-grounds polygons to check points against actual campuses.
     <span class="note">Giga (UNICEF) school data is intentionally excluded from this public app and is compared in a separate private variant.</span>
   </p>
 </header>
 
 <div id="controls" class="panel">
-  <h2>Country</h2>
-  <select id="country-select">
-    <option value="NER">Niger</option>
-    <option value="GIN">Guinea</option>
-    <option value="MLI">Mali</option>
-    <option value="BEN">Benin</option>
-    <option value="GHA">Ghana</option>
-  </select>
+  <section>
+    <h2>Country</h2>
+    <select id="country-select">
+      <option value="NER">Niger</option>
+      <option value="GIN">Guinea</option>
+      <option value="MLI">Mali</option>
+      <option value="BEN">Benin</option>
+      <option value="GHA">Ghana</option>
+    </select>
+  </section>
 
-  <h2>Sources</h2>
-  <label class="layer-row">
-    <input type="checkbox" id="toggle-osm" checked />
-    <span class="swatch" style="background: var(--osm-color);"></span>
-    <span class="lbl">OpenStreetMap</span>
-    <span class="cnt" id="cnt-osm">-</span>
-  </label>
-  <label class="layer-row">
-    <input type="checkbox" id="toggle-overture" checked />
-    <span class="swatch" style="background: var(--overture-color);"></span>
-    <span class="lbl">Overture Maps</span>
-    <span class="cnt" id="cnt-overture">-</span>
-  </label>
+  <section>
+    <h2>View</h2>
+    <div class="seg">
+      <button id="mode-source" class="active">By source</button>
+      <button id="mode-agreement">Agreement</button>
+    </div>
+    <div id="rows-source">
+      <label class="layer-row">
+        <input type="checkbox" id="toggle-osm" checked />
+        <span class="swatch" style="background: var(--osm-color);"></span>
+        <span class="lbl">OpenStreetMap</span>
+        <span class="cnt" id="cnt-osm">-</span>
+      </label>
+      <label class="layer-row">
+        <input type="checkbox" id="toggle-overture" checked />
+        <span class="swatch" style="background: var(--overture-color);"></span>
+        <span class="lbl">Overture Maps</span>
+        <span class="cnt" id="cnt-overture">-</span>
+      </label>
+    </div>
+    <div id="rows-agreement" style="display:none">
+      <label class="layer-row">
+        <input type="checkbox" id="toggle-both" checked />
+        <span class="swatch" style="background: var(--match-color);"></span>
+        <span class="lbl">In both (matched)</span>
+        <span class="cnt" id="cnt-both">-</span>
+      </label>
+      <label class="layer-row">
+        <input type="checkbox" id="toggle-osm-only" checked />
+        <span class="swatch" style="background: var(--osm-color);"></span>
+        <span class="lbl">OSM only</span>
+        <span class="cnt" id="cnt-osm-only">-</span>
+      </label>
+      <label class="layer-row">
+        <input type="checkbox" id="toggle-ovt-only" checked />
+        <span class="swatch" style="background: var(--overture-color);"></span>
+        <span class="lbl">Overture only</span>
+        <span class="cnt" id="cnt-ovt-only">-</span>
+      </label>
+    </div>
+  </section>
 
-  <div class="stats">
-    <div class="delta" id="delta-text">Loading counts...</div>
-  </div>
+  <section>
+    <h2>Footprints</h2>
+    <label class="layer-row">
+      <input type="checkbox" id="toggle-grounds" />
+      <span class="swatch poly" style="background: rgba(27,158,119,0.4); border-color: var(--osm-color);"></span>
+      <span class="lbl">OSM school grounds</span>
+      <span class="cnt" id="cnt-grounds">-</span>
+    </label>
+    <label class="layer-row">
+      <input type="checkbox" id="toggle-osmbld" />
+      <span class="swatch poly" style="background: rgba(12,110,82,0.75); border-color: #0c6e52;"></span>
+      <span class="lbl">OSM school buildings</span>
+      <span class="cnt" id="cnt-osmbld">-</span>
+    </label>
+    <label class="layer-row">
+      <input type="checkbox" id="toggle-buildings" />
+      <span class="swatch poly" style="background: rgba(217,95,2,0.12); border-color: var(--overture-color); border-style: dashed;"></span>
+      <span class="lbl">Overture edu buildings</span>
+      <span class="cnt" id="cnt-buildings">-</span>
+    </label>
+  </section>
 
-  <div class="basemap-toggle">
+  <section class="stats">
+    <h2>Match analysis</h2>
+    <div class="delta" id="delta-text">Loading...</div>
+    <div class="kpis" id="kpis" style="display:none">
+      <div class="kpi"><div class="v" id="kpi-matched">-</div><div class="k">matched pairs</div></div>
+      <div class="kpi"><div class="v" id="kpi-pct-ovt">-</div><div class="k">of Overture in OSM</div></div>
+      <div class="kpi"><div class="v" id="kpi-offset">-</div><div class="k">median offset</div></div>
+      <div class="kpi"><div class="v" id="kpi-names">-</div><div class="k">names agree</div></div>
+    </div>
+  </section>
+
+  <section class="basemap-toggle">
     <label>
       <input type="checkbox" id="toggle-basemap" />
       <span>Use OSM street basemap</span>
     </label>
-  </div>
+  </section>
 
   <div id="legend-hint">
-    Imagery: Esri World Imagery. Click a point for details.
-    <br><br><b>What the points are</b> - all are single points (one per school record), not building footprints:
-    <ul style="margin:5px 0 0;padding-left:16px">
-      <li><b>OpenStreetMap</b>: <code>amenity=school</code> - a hand-placed node, or the centroid of a school-grounds/building polygon.</li>
-      <li><b>Overture Maps</b>: <code>places</code> POIs (from commercial datasets) tagged school/education - so the "school" definition is looser.</li>
-    </ul>
-    Points are clipped to each country's admin-0 boundary. Counts are not de-duplicated across sources.
+    Imagery: Esri World Imagery. Click a point or polygon for details.
+    <br><br><b>Matching</b>: an OSM and an Overture point are paired when they are
+    within 100 m of each other, or within 300 m with similar names (1:1, best pair first).
+    In the Agreement view, matched pairs are cyan and joined by a line when you zoom in.
+    <br><br><b>Footprints</b>: OSM school grounds are <code>amenity=school</code> polygons
+    (campus outlines). OSM school buildings are <code>building</code> footprints that
+    intersect school grounds, are tagged as schools, or contain a school point.
+    Overture edu buildings are footprints tagged <code>subtype=education</code>.
+    Comparing them shows where each source has real polygon coverage rather than just a point.
+    <br><br>All layers are clipped to admin-0 boundaries. Counts are per source, not de-duplicated.
   </div>
 </div>
 
@@ -154,6 +244,7 @@ const COUNTRIES = {
 
 const OSM_COLOR = "#1b9e77";
 const OVERTURE_COLOR = "#d95f02";
+const MATCH_COLOR = "#18d0e8";
 
 const ESRI_IMAGERY = {
   type: "raster",
@@ -194,94 +285,28 @@ map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "
 
 const loadingEl = document.getElementById("loading");
 const fmt = (n) => n.toLocaleString("en-US");
+const $ = (id) => document.getElementById(id);
 
-let currentISO = "NER";
-const counts = { osm: 0, overture: 0 };
+const state = {
+  iso: "NER",
+  mode: "source",               // "source" | "agreement"
+  show: { osm: true, overture: true, both: true, osmOnly: true, ovtOnly: true,
+          grounds: false, osmbld: false, buildings: false },
+  counts: { osm: 0, overture: 0, matched: 0 },
+  summary: null,                // data/match_summary.json
+};
 
-function addLayersForSource(src, color) {
-  const srcId = `${src}-src`;
-  const lyrId = `${src}-pts`;
-  const url = `data/${src}_schools_${currentISO}.geojson`;
-  map.addSource(srcId, { type: "geojson", data: url });
-  map.addLayer({
-    id: lyrId,
-    type: "circle",
-    source: srcId,
-    paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 2.2, 10, 4.5, 16, 7],
-      "circle-color": color,
-      "circle-stroke-width": 1,
-      "circle-stroke-color": "rgba(255,255,255,0.85)",
-      "circle-opacity": 0.9,
-    },
-    layout: { visibility: document.getElementById(`toggle-${src}`).checked ? "visible" : "none" },
-  });
-  attachPopup(lyrId, src);
+// ---------------------------------------------------------------- data layers
+
+async function fetchJson(url) {
+  const r = await fetch(url, { cache: "force-cache" });
+  if (!r.ok) throw new Error(`${r.status} ${url}`);
+  return r.json();
 }
 
-function attachPopup(lyrId, src) {
-  map.on("click", lyrId, (e) => {
-    const p = e.features[0].properties;
-    const color = src === "osm" ? OSM_COLOR : OVERTURE_COLOR;
-    const label = src === "osm" ? "OpenStreetMap" : "Overture Maps";
-    const name = p.name && p.name !== "null" ? p.name : "(unnamed)";
-    const cat = p.category && p.category !== "null" ? p.category : (p.level && p.level !== "Unknown" ? p.level : "school");
-    const html = `<div class="pop-name">${escapeHtml(name)}</div>
-      <span class="pop-src" style="background:${color}">${label}</span>
-      <div class="pop-meta">Category: ${escapeHtml(String(cat))}</div>`;
-    new maplibregl.Popup({ closeButton: true, offset: 8 })
-      .setLngLat(e.lngLat).setHTML(html).addTo(map);
-  });
-  map.on("mouseenter", lyrId, () => { map.getCanvas().style.cursor = "pointer"; });
-  map.on("mouseleave", lyrId, () => { map.getCanvas().style.cursor = ""; });
-}
-
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-function removeLayers() {
-  ["osm", "overture"].forEach((src) => {
-    if (map.getLayer(`${src}-pts`)) map.removeLayer(`${src}-pts`);
-    if (map.getSource(`${src}-src`)) map.removeSource(`${src}-src`);
-  });
-}
-
-async function fetchCount(src, iso) {
-  try {
-    const r = await fetch(`data/${src}_schools_${iso}.geojson`, { cache: "force-cache" });
-    const j = await r.json();
-    return j.features.length;
-  } catch (e) { return 0; }
-}
-
-async function updateStats() {
-  document.getElementById("cnt-osm").textContent = fmt(counts.osm);
-  document.getElementById("cnt-overture").textContent = fmt(counts.overture);
-  const diff = Math.abs(counts.osm - counts.overture);
-  const more = counts.osm > counts.overture ? "OpenStreetMap" : "Overture";
-  const deltaEl = document.getElementById("delta-text");
-  if (counts.osm && counts.overture) {
-    deltaEl.innerHTML = `<strong>${COUNTRIES[currentISO].name}:</strong> ${more} lists `
-      + `${fmt(diff)} more (${fmt(Math.max(counts.osm, counts.overture))} vs ${fmt(Math.min(counts.osm, counts.overture))}). `
-      + `Overlap between sources is not de-duplicated here.`;
-  } else {
-    deltaEl.textContent = `${COUNTRIES[currentISO].name}: OSM ${fmt(counts.osm)} / Overture ${fmt(counts.overture)}`;
-  }
-}
-
-async function loadCountry(iso) {
-  currentISO = iso;
-  loadingEl.style.display = "block";
-  removeLayers();
-  addLayersForSource("osm", OSM_COLOR);
-  addLayersForSource("overture", OVERTURE_COLOR);
-  const c = COUNTRIES[iso];
-  map.flyTo({ center: c.center, zoom: c.zoom, speed: 1.4 });
-  const [o, v] = await Promise.all([fetchCount("osm", iso), fetchCount("overture", iso)]);
-  counts.osm = o; counts.overture = v;
-  await updateStats();
-  loadingEl.style.display = "none";
+function rm(layerIds, sourceIds) {
+  layerIds.forEach((l) => { if (map.getLayer(l)) map.removeLayer(l); });
+  sourceIds.forEach((s) => { if (map.getSource(s)) map.removeSource(s); });
 }
 
 function addBoundaries() {
@@ -298,25 +323,275 @@ function addBoundaries() {
     paint: { "text-color": "#fff", "text-halo-color": "rgba(0,0,0,0.85)", "text-halo-width": 1.6, "text-opacity": 0.92 } });
 }
 
-map.on("load", () => { addBoundaries(); loadCountry("NER"); });
+// Polygon overlay layers. Order in POLY_KINDS = draw order (first is lowest).
+// Overture edu buildings draw as a dashed outline with a faint fill so the
+// solid OSM school buildings stay visible underneath: solid green = OSM,
+// green + dashed orange ring = in both, dashed orange alone = Overture-only.
+const POLY_KINDS = {
+  grounds:   { file: "osm_school_grounds",     color: OSM_COLOR, fill: 0.18,
+               width: 1.6, label: "OSM school grounds" },
+  osmbld:    { file: "osm_school_buildings",   color: "#0c6e52", fill: 0.5,
+               width: 1.2, label: "OSM school building" },
+  buildings: { file: "overture_edu_buildings", color: OVERTURE_COLOR, fill: 0.08,
+               width: 2.2, dash: [2, 1.2], label: "Overture edu building" },
+};
 
-document.getElementById("country-select").addEventListener("change", (e) => loadCountry(e.target.value));
+function addPolygonLayers(kind) {
+  const k = POLY_KINDS[kind];
+  const file = `data/${k.file}_${state.iso}.geojson`;
+  rm([`${kind}-fill`, `${kind}-line`], [`${kind}-src`]);
+  map.addSource(`${kind}-src`, { type: "geojson", data: file });
+  // Keep polygons under the match lines, and under any later-stacking kind
+  // that is already on the map so draw order stays stable.
+  const kinds = Object.keys(POLY_KINDS);
+  let before = map.getLayer("match-lines") ? "match-lines" : "borders-label";
+  for (const later of kinds.slice(kinds.indexOf(kind) + 1)) {
+    if (map.getLayer(`${later}-fill`)) { before = `${later}-fill`; break; }
+  }
+  map.addLayer({ id: `${kind}-fill`, type: "fill", source: `${kind}-src`,
+    paint: { "fill-color": k.color, "fill-opacity": k.fill } }, before);
+  const linePaint = { "line-color": k.color, "line-width": k.width, "line-opacity": 0.9 };
+  if (k.dash) linePaint["line-dasharray"] = k.dash;
+  map.addLayer({ id: `${kind}-line`, type: "line", source: `${kind}-src`,
+    paint: linePaint }, before);
+  attachPolyPopup(`${kind}-fill`, kind);
+  // Count for the sidebar (separate fetch hits the browser cache).
+  fetchJson(file)
+    .then((j) => { $(`cnt-${kind}`).textContent = fmt(j.features.length); })
+    .catch(() => { $(`cnt-${kind}`).textContent = "n/a"; });
+}
 
-["osm", "overture"].forEach((src) => {
-  document.getElementById(`toggle-${src}`).addEventListener("change", (e) => {
-    const vis = e.target.checked ? "visible" : "none";
-    if (map.getLayer(`${src}-pts`)) map.setLayoutProperty(`${src}-pts`, "visibility", vis);
+function addMatchLines() {
+  rm(["match-lines"], ["lines-src"]);
+  map.addSource("lines-src", { type: "geojson", data: `data/match_lines_${state.iso}.geojson` });
+  map.addLayer({ id: "match-lines", type: "line", source: "lines-src",
+    minzoom: 10,
+    paint: { "line-color": MATCH_COLOR, "line-width": 1.6, "line-opacity": 0.8,
+             "line-dasharray": [2, 1.5] },
+    layout: { visibility: "none" } }, "borders-label");
+}
+
+function addPointLayers() {
+  ["osm", "overture"].forEach((src) => {
+    rm([`${src}-pts`], [`${src}-src`]);
+    map.addSource(`${src}-src`, { type: "geojson",
+      data: `data/${src}_schools_${state.iso}.geojson` });
+    map.addLayer({
+      id: `${src}-pts`,
+      type: "circle",
+      source: `${src}-src`,
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 2.2, 10, 4.5, 16, 7],
+        "circle-color": src === "osm" ? OSM_COLOR : OVERTURE_COLOR,
+        "circle-stroke-width": 1,
+        "circle-stroke-color": "rgba(255,255,255,0.85)",
+        "circle-opacity": 0.9,
+      },
+    });
+    attachPopup(`${src}-pts`, src);
+  });
+}
+
+function addAllLayers() {
+  addBoundaries();
+  addMatchLines();
+  Object.keys(POLY_KINDS).forEach((k) => { if (state.show[k]) addPolygonLayers(k); });
+  addPointLayers();
+  applyMode();
+}
+
+// ----------------------------------------------------------------- popups
+
+function attachPopup(lyrId, src) {
+  map.on("click", lyrId, (e) => {
+    const p = e.features[0].properties;
+    const color = src === "osm" ? OSM_COLOR : OVERTURE_COLOR;
+    const label = src === "osm" ? "OpenStreetMap" : "Overture Maps";
+    const other = src === "osm" ? "Overture" : "OSM";
+    const name = p.name && p.name !== "null" ? p.name : "(unnamed)";
+    const cat = p.category && p.category !== "null" ? p.category : (p.level && p.level !== "Unknown" ? p.level : "school");
+    let matchHtml;
+    if (p.match === "both") {
+      const mn = p.match_name && p.match_name !== "null" ? escapeHtml(p.match_name) : "(unnamed)";
+      const sim = p.name_sim !== undefined && p.name_sim !== null && p.name_sim !== "null"
+        ? ` &middot; name similarity ${Math.round(Number(p.name_sim) * 100)}%` : "";
+      matchHtml = `<div class="pop-match">Matched in ${other}: <b>${mn}</b><br>` +
+        `${Math.round(Number(p.match_dist_m))} m apart${sim}</div>`;
+    } else {
+      matchHtml = `<div class="pop-match nomatch">No ${other} counterpart within 300 m</div>`;
+    }
+    const html = `<div class="pop-name">${escapeHtml(name)}</div>
+      <span class="pop-src" style="background:${color}">${label}</span>
+      <div class="pop-meta">Category: ${escapeHtml(String(cat))}</div>
+      ${matchHtml}`;
+    new maplibregl.Popup({ closeButton: true, offset: 8 })
+      .setLngLat(e.lngLat).setHTML(html).addTo(map);
+  });
+  map.on("mouseenter", lyrId, () => { map.getCanvas().style.cursor = "pointer"; });
+  map.on("mouseleave", lyrId, () => { map.getCanvas().style.cursor = ""; });
+}
+
+const WHY_LABELS = {
+  grounds: "inside school grounds",
+  tag: "tagged as school",
+  node: "contains a school point",
+};
+
+function attachPolyPopup(lyrId, kind) {
+  map.on("click", lyrId, (e) => {
+    // Let point clicks win when stacked on a polygon.
+    const pts = map.queryRenderedFeatures(e.point, { layers: ["osm-pts", "overture-pts"].filter((l) => map.getLayer(l)) });
+    if (pts.length) return;
+    // When polygon kinds stack, only the top-most one opens a popup.
+    const kinds = Object.keys(POLY_KINDS);
+    const above = kinds.slice(kinds.indexOf(kind) + 1)
+      .filter((x) => map.getLayer(`${x}-fill`)).map((x) => `${x}-fill`);
+    if (above.length && map.queryRenderedFeatures(e.point, { layers: above }).length) return;
+    const p = e.features[0].properties;
+    const k = POLY_KINDS[kind];
+    const name = p.name && p.name !== "null" ? p.name : "(unnamed)";
+    let extra = "";
+    if (kind === "buildings" && p.class && p.class !== "null")
+      extra = `<div class="pop-meta">Class: ${escapeHtml(p.class)}</div>`;
+    if (kind === "osmbld" && p.why)
+      extra = `<div class="pop-meta">Qualifies: ${escapeHtml(
+        p.why.split(",").map((w) => WHY_LABELS[w] || w).join("; "))}</div>`;
+    const html = `<div class="pop-name">${escapeHtml(name)}</div>
+      <span class="pop-src" style="background:${k.color}">${k.label}</span>${extra}`;
+    new maplibregl.Popup({ closeButton: true, offset: 8 })
+      .setLngLat(e.lngLat).setHTML(html).addTo(map);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ------------------------------------------------------------- view modes
+
+function applyMode() {
+  const agree = state.mode === "agreement";
+  $("rows-source").style.display = agree ? "none" : "";
+  $("rows-agreement").style.display = agree ? "" : "none";
+  $("mode-source").classList.toggle("active", !agree);
+  $("mode-agreement").classList.toggle("active", agree);
+
+  ["osm", "overture"].forEach((src) => {
+    const lyr = `${src}-pts`;
+    if (!map.getLayer(lyr)) return;
+    if (agree) {
+      map.setPaintProperty(lyr, "circle-color", ["case",
+        ["==", ["get", "match"], "both"], MATCH_COLOR,
+        src === "osm" ? OSM_COLOR : OVERTURE_COLOR]);
+      const conds = [];
+      if (state.show.both) conds.push(["==", ["get", "match"], "both"]);
+      if (src === "osm" ? state.show.osmOnly : state.show.ovtOnly)
+        conds.push(["!=", ["get", "match"], "both"]);
+      map.setFilter(lyr, conds.length ? ["any", ...conds] : ["==", ["get", "match"], "__none__"]);
+      map.setLayoutProperty(lyr, "visibility", "visible");
+    } else {
+      map.setPaintProperty(lyr, "circle-color", src === "osm" ? OSM_COLOR : OVERTURE_COLOR);
+      map.setFilter(lyr, null);
+      map.setLayoutProperty(lyr, "visibility",
+        (src === "osm" ? state.show.osm : state.show.overture) ? "visible" : "none");
+    }
+  });
+  if (map.getLayer("match-lines"))
+    map.setLayoutProperty("match-lines", "visibility", agree && state.show.both ? "visible" : "none");
+}
+
+// ------------------------------------------------------------------ stats
+
+function updateStats() {
+  $("cnt-osm").textContent = fmt(state.counts.osm);
+  $("cnt-overture").textContent = fmt(state.counts.overture);
+  const s = state.summary && state.summary.countries[state.iso];
+  const deltaEl = $("delta-text");
+  if (!s) {
+    deltaEl.textContent = `${COUNTRIES[state.iso].name}: OSM ${fmt(state.counts.osm)} / Overture ${fmt(state.counts.overture)}`;
+    $("kpis").style.display = "none";
+    return;
+  }
+  state.counts.matched = s.n_matched;
+  $("cnt-both").textContent = fmt(s.n_matched);
+  $("cnt-osm-only").textContent = fmt(s.osm_unmatched);
+  $("cnt-ovt-only").textContent = fmt(s.overture_unmatched);
+
+  deltaEl.innerHTML =
+    `<b>${COUNTRIES[state.iso].name}:</b> Overture adds <b>${fmt(s.overture_unmatched)}</b> ` +
+    `schools not in OSM, while <b>${fmt(s.osm_unmatched)}</b> OSM schools have no Overture counterpart.`;
+  $("kpi-matched").textContent = fmt(s.n_matched);
+  $("kpi-pct-ovt").textContent = `${s.pct_overture_matched}%`;
+  $("kpi-offset").textContent = s.median_dist_m != null ? `${Math.round(s.median_dist_m)} m` : "-";
+  $("kpi-names").textContent = s.pct_names_agree != null ? `${s.pct_names_agree}%` : "-";
+  $("kpis").style.display = "";
+}
+
+async function fetchCount(src, iso) {
+  try {
+    const j = await fetchJson(`data/${src}_schools_${iso}.geojson`);
+    return j.features.length;
+  } catch (e) { return 0; }
+}
+
+// ------------------------------------------------------------- interactions
+
+async function loadCountry(iso) {
+  state.iso = iso;
+  loadingEl.style.display = "block";
+  const polyKinds = Object.keys(POLY_KINDS);
+  rm(["osm-pts", "overture-pts", "match-lines",
+      ...polyKinds.flatMap((k) => [`${k}-fill`, `${k}-line`])],
+     ["osm-src", "overture-src", "lines-src", ...polyKinds.map((k) => `${k}-src`)]);
+  addMatchLines();
+  polyKinds.forEach((k) => { if (state.show[k]) addPolygonLayers(k); });
+  addPointLayers();
+  applyMode();
+  const c = COUNTRIES[iso];
+  map.flyTo({ center: c.center, zoom: c.zoom, speed: 1.4 });
+  const [o, v] = await Promise.all([fetchCount("osm", iso), fetchCount("overture", iso)]);
+  state.counts.osm = o; state.counts.overture = v;
+  updateStats();
+  loadingEl.style.display = "none";
+}
+
+map.on("load", async () => {
+  try { state.summary = await fetchJson("data/match_summary.json"); } catch (e) { /* optional */ }
+  addAllLayers();
+  loadCountry("NER");
+});
+
+$("country-select").addEventListener("change", (e) => loadCountry(e.target.value));
+
+$("mode-source").addEventListener("click", () => { state.mode = "source"; applyMode(); });
+$("mode-agreement").addEventListener("click", () => { state.mode = "agreement"; applyMode(); });
+
+$("toggle-osm").addEventListener("change", (e) => { state.show.osm = e.target.checked; applyMode(); });
+$("toggle-overture").addEventListener("change", (e) => { state.show.overture = e.target.checked; applyMode(); });
+$("toggle-both").addEventListener("change", (e) => { state.show.both = e.target.checked; applyMode(); });
+$("toggle-osm-only").addEventListener("change", (e) => { state.show.osmOnly = e.target.checked; applyMode(); });
+$("toggle-ovt-only").addEventListener("change", (e) => { state.show.ovtOnly = e.target.checked; applyMode(); });
+
+["grounds", "osmbld", "buildings"].forEach((kind) => {
+  $(`toggle-${kind}`).addEventListener("change", (e) => {
+    state.show[kind] = e.target.checked;
+    if (e.target.checked) {
+      addPolygonLayers(kind);
+    } else {
+      rm([`${kind}-fill`, `${kind}-line`], [`${kind}-src`]);
+      $(`cnt-${kind}`).textContent = "-";
+    }
   });
 });
 
-document.getElementById("toggle-basemap").addEventListener("change", (e) => {
+$("toggle-basemap").addEventListener("change", (e) => {
   const useOsm = e.target.checked;
   const center = map.getCenter(); const zoom = map.getZoom();
   map.setStyle(baseStyle(useOsm));
   map.once("styledata", () => {
     map.jumpTo({ center, zoom });
-    addLayersForSource("osm", OSM_COLOR);
-    addLayersForSource("overture", OVERTURE_COLOR);
+    addAllLayers();
+    updateStats();
   });
 });
 </script>

@@ -1,0 +1,66 @@
+{
+ "max_dist_m": 300.0,
+ "name_sim_agree": 0.6,
+ "countries": {
+  "NER": {
+   "n_osm": 2512,
+   "n_overture": 156,
+   "n_matched": 14,
+   "pct_overture_matched": 9.0,
+   "pct_osm_matched": 0.6,
+   "median_dist_m": 75.1,
+   "n_named_pairs": 14,
+   "pct_names_agree": 28.6,
+   "overture_unmatched": 142,
+   "osm_unmatched": 2498
+  },
+  "GIN": {
+   "n_osm": 2351,
+   "n_overture": 291,
+   "n_matched": 40,
+   "pct_overture_matched": 13.7,
+   "pct_osm_matched": 1.7,
+   "median_dist_m": 91.4,
+   "n_named_pairs": 40,
+   "pct_names_agree": 37.5,
+   "overture_unmatched": 251,
+   "osm_unmatched": 2311
+  },
+  "MLI": {
+   "n_osm": 11798,
+   "n_overture": 297,
+   "n_matched": 54,
+   "pct_overture_matched": 18.2,
+   "pct_osm_matched": 0.5,
+   "median_dist_m": 68.1,
+   "n_named_pairs": 54,
+   "pct_names_agree": 16.7,
+   "overture_unmatched": 243,
+   "osm_unmatched": 11744
+  },
+  "BEN": {
+   "n_osm": 2713,
+   "n_overture": 303,
+   "n_matched": 25,
+   "pct_overture_matched": 8.3,
+   "pct_osm_matched": 0.9,
+   "median_dist_m": 55.3,
+   "n_named_pairs": 25,
+   "pct_names_agree": 28.0,
+   "overture_unmatched": 278,
+   "osm_unmatched": 2688
+  },
+  "GHA": {
+   "n_osm": 4500,
+   "n_overture": 2466,
+   "n_matched": 315,
+   "pct_overture_matched": 12.8,
+   "pct_osm_matched": 7.0,
+   "median_dist_m": 73.8,
+   "n_named_pairs": 315,
+   "pct_names_agree": 54.3,
+   "overture_unmatched": 2151,
+   "osm_unmatched": 4185
+  }
+ }
+}
