@@ -1,0 +1,16 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Large / temp data (keep the small per-country GeoJSONs under data/)
+*.parquet
+tmp/
+*.tmp

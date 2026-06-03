@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SIRS Compare - Open school-location sources</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root {
+    --wb-blue: #002244;
+    --wb-accent: #009fda;
+    --osm-color: #1b9e77;
+    --overture-color: #d95f02;
+    --panel-bg: rgba(255, 255, 255, 0.97);
+    --border: #d7dde3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1a2733; }
+  #map { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+
+  header {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+    background: var(--wb-blue); color: #fff;
+    padding: 12px 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  header h1 { margin: 0 0 3px; font-size: 17px; font-weight: 600; letter-spacing: 0.2px; }
+  header p { margin: 0; font-size: 12.5px; line-height: 1.4; color: #cdd8e3; max-width: 980px; }
+  header .note { color: #9fb4c7; font-style: italic; }
+
+  .panel {
+    position: absolute; z-index: 5;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+    font-size: 13px;
+  }
+  #controls { top: 92px; left: 14px; width: 248px; padding: 14px; }
+  #controls h2 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: #5a6b7b; }
+
+  select {
+    width: 100%; padding: 7px 8px; font-size: 14px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff;
+    margin-bottom: 14px;
+  }
+
+  .layer-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; cursor: pointer; }
+  .layer-row input { width: 15px; height: 15px; cursor: pointer; }
+  .swatch { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,0.35); flex: 0 0 auto; }
+  .layer-row .lbl { flex: 1; }
+  .layer-row .cnt { font-variant-numeric: tabular-nums; font-weight: 600; color: #2b3947; }
+
+  .stats { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .stats .delta { font-size: 12px; color: #5a6b7b; line-height: 1.5; }
+
+  .basemap-toggle { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .basemap-toggle label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+  #legend-hint { margin-top: 10px; font-size: 11.5px; color: #6a7b8b; line-height: 1.45; }
+
+  .maplibregl-popup-content { font-size: 13px; padding: 10px 12px; border-radius: 6px; }
+  .maplibregl-popup-content .pop-name { font-weight: 600; margin-bottom: 4px; font-size: 13.5px; }
+  .maplibregl-popup-content .pop-src { display: inline-block; padding: 1px 7px; border-radius: 10px; color: #fff; font-size: 11px; font-weight: 600; }
+  .maplibregl-popup-content .pop-meta { color: #5a6b7b; margin-top: 5px; }
+
+  #loading { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 6;
+    background: rgba(0,34,68,0.9); color: #fff; padding: 6px 14px; border-radius: 16px; font-size: 12px; display: none; }
+
+  footer { position: absolute; bottom: 0; right: 0; z-index: 4; font-size: 10.5px; color: #33424f;
+    background: rgba(255,255,255,0.8); padding: 2px 8px; border-top-left-radius: 6px; }
+  footer a { color: #0a558c; }
+
+  @media (max-width: 640px) {
+    header p { display: none; }
+    #controls { width: 210px; top: 70px; }
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<header>
+  <h1>SIRS Compare &middot; Open school-location sources</h1>
+  <p>
+    Compare open school-location datasets over high-resolution satellite imagery for five West African countries.
+    Toggle sources on and off and zoom in to a school to eyeball whether each point sits on a real school building -
+    a quick way to gauge the completeness and accuracy of any one source before relying on it.
+    <span class="note">Giga (UNICEF) school data is intentionally excluded from this public app and is compared in a separate private variant.</span>
+  </p>
+</header>
+
+<div id="controls" class="panel">
+  <h2>Country</h2>
+  <select id="country-select">
+    <option value="NER">Niger</option>
+    <option value="GIN">Guinea</option>
+    <option value="MLI">Mali</option>
+    <option value="BEN">Benin</option>
+    <option value="GHA">Ghana</option>
+  </select>
+
+  <h2>Sources</h2>
+  <label class="layer-row">
+    <input type="checkbox" id="toggle-osm" checked />
+    <span class="swatch" style="background: var(--osm-color);"></span>
+    <span class="lbl">OpenStreetMap</span>
+    <span class="cnt" id="cnt-osm">-</span>
+  </label>
+  <label class="layer-row">
+    <input type="checkbox" id="toggle-overture" checked />
+    <span class="swatch" style="background: var(--overture-color);"></span>
+    <span class="lbl">Overture Maps</span>
+    <span class="cnt" id="cnt-overture">-</span>
+  </label>
+
+  <div class="stats">
+    <div class="delta" id="delta-text">Loading counts...</div>
+  </div>
+
+  <div class="basemap-toggle">
+    <label>
+      <input type="checkbox" id="toggle-basemap" />
+      <span>Use OSM street basemap</span>
+    </label>
+  </div>
+
+  <div id="legend-hint">
+    Imagery: Esri World Imagery. Points are school / education places from each source.
+    Click a point for details.
+  </div>
+</div>
+
+<div id="loading">Loading data...</div>
+
+<footer>
+  Imagery &copy; Esri, Maxar, Earthstar Geographics &middot; OSM &copy; OpenStreetMap contributors (ODbL) &middot; Overture Maps (ODbL/CC-BY)
+</footer>
+
+<script>
+const COUNTRIES = {
+  NER: { name: "Niger",  center: [8.0, 17.6], zoom: 5.2 },
+  GIN: { name: "Guinea", center: [-10.9, 10.4], zoom: 6.2 },
+  MLI: { name: "Mali",   center: [-3.5, 17.5], zoom: 4.9 },
+  BEN: { name: "Benin",  center: [2.3, 9.6], zoom: 6.2 },
+  GHA: { name: "Ghana",  center: [-1.0, 7.9], zoom: 6.3 },
+};
+
+const OSM_COLOR = "#1b9e77";
+const OVERTURE_COLOR = "#d95f02";
+
+const ESRI_IMAGERY = {
+  type: "raster",
+  tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+  tileSize: 256,
+  maxzoom: 19,
+  attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+};
+const OSM_RASTER = {
+  type: "raster",
+  tiles: ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"],
+  tileSize: 256,
+  maxzoom: 19,
+  attribution: "&copy; OpenStreetMap contributors",
+};
+
+function baseStyle(useOsm) {
+  return {
+    version: 8,
+    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    sources: { basemap: useOsm ? OSM_RASTER : ESRI_IMAGERY },
+    layers: [{ id: "basemap", type: "raster", source: "basemap" }],
+  };
+}
+
+const map = new maplibregl.Map({
+  container: "map",
+  style: baseStyle(false),
+  center: COUNTRIES.NER.center,
+  zoom: COUNTRIES.NER.zoom,
+  attributionControl: false,
+});
+map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
+
+const loadingEl = document.getElementById("loading");
+const fmt = (n) => n.toLocaleString("en-US");
+
+let currentISO = "NER";
+const counts = { osm: 0, overture: 0 };
+
+function addLayersForSource(src, color) {
+  const srcId = `${src}-src`;
+  const lyrId = `${src}-pts`;
+  const url = `data/${src}_schools_${currentISO}.geojson`;
+  map.addSource(srcId, { type: "geojson", data: url });
+  map.addLayer({
+    id: lyrId,
+    type: "circle",
+    source: srcId,
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 2.2, 10, 4.5, 16, 7],
+      "circle-color": color,
+      "circle-stroke-width": 1,
+      "circle-stroke-color": "rgba(255,255,255,0.85)",
+      "circle-opacity": 0.9,
+    },
+    layout: { visibility: document.getElementById(`toggle-${src}`).checked ? "visible" : "none" },
+  });
+  attachPopup(lyrId, src);
+}
+
+function attachPopup(lyrId, src) {
+  map.on("click", lyrId, (e) => {
+    const p = e.features[0].properties;
+    const color = src === "osm" ? OSM_COLOR : OVERTURE_COLOR;
+    const label = src === "osm" ? "OpenStreetMap" : "Overture Maps";
+    const name = p.name && p.name !== "null" ? p.name : "(unnamed)";
+    const cat = p.category && p.category !== "null" ? p.category : (p.level && p.level !== "Unknown" ? p.level : "school");
+    const html = `<div class="pop-name">${escapeHtml(name)}</div>
+      <span class="pop-src" style="background:${color}">${label}</span>
+      <div class="pop-meta">Category: ${escapeHtml(String(cat))}</div>`;
+    new maplibregl.Popup({ closeButton: true, offset: 8 })
+      .setLngLat(e.lngLat).setHTML(html).addTo(map);
+  });
+  map.on("mouseenter", lyrId, () => { map.getCanvas().style.cursor = "pointer"; });
+  map.on("mouseleave", lyrId, () => { map.getCanvas().style.cursor = ""; });
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function removeLayers() {
+  ["osm", "overture"].forEach((src) => {
+    if (map.getLayer(`${src}-pts`)) map.removeLayer(`${src}-pts`);
+    if (map.getSource(`${src}-src`)) map.removeSource(`${src}-src`);
+  });
+}
+
+async function fetchCount(src, iso) {
+  try {
+    const r = await fetch(`data/${src}_schools_${iso}.geojson`, { cache: "force-cache" });
+    const j = await r.json();
+    return j.features.length;
+  } catch (e) { return 0; }
+}
+
+async function updateStats() {
+  document.getElementById("cnt-osm").textContent = fmt(counts.osm);
+  document.getElementById("cnt-overture").textContent = fmt(counts.overture);
+  const diff = Math.abs(counts.osm - counts.overture);
+  const more = counts.osm > counts.overture ? "OpenStreetMap" : "Overture";
+  const deltaEl = document.getElementById("delta-text");
+  if (counts.osm && counts.overture) {
+    deltaEl.innerHTML = `<strong>${COUNTRIES[currentISO].name}:</strong> ${more} lists `
+      + `${fmt(diff)} more (${fmt(Math.max(counts.osm, counts.overture))} vs ${fmt(Math.min(counts.osm, counts.overture))}). `
+      + `Overlap between sources is not de-duplicated here.`;
+  } else {
+    deltaEl.textContent = `${COUNTRIES[currentISO].name}: OSM ${fmt(counts.osm)} / Overture ${fmt(counts.overture)}`;
+  }
+}
+
+async function loadCountry(iso) {
+  currentISO = iso;
+  loadingEl.style.display = "block";
+  removeLayers();
+  addLayersForSource("osm", OSM_COLOR);
+  addLayersForSource("overture", OVERTURE_COLOR);
+  const c = COUNTRIES[iso];
+  map.flyTo({ center: c.center, zoom: c.zoom, speed: 1.4 });
+  const [o, v] = await Promise.all([fetchCount("osm", iso), fetchCount("overture", iso)]);
+  counts.osm = o; counts.overture = v;
+  await updateStats();
+  loadingEl.style.display = "none";
+}
+
+map.on("load", () => loadCountry("NER"));
+
+document.getElementById("country-select").addEventListener("change", (e) => loadCountry(e.target.value));
+
+["osm", "overture"].forEach((src) => {
+  document.getElementById(`toggle-${src}`).addEventListener("change", (e) => {
+    const vis = e.target.checked ? "visible" : "none";
+    if (map.getLayer(`${src}-pts`)) map.setLayoutProperty(`${src}-pts`, "visibility", vis);
+  });
+});
+
+document.getElementById("toggle-basemap").addEventListener("change", (e) => {
+  const useOsm = e.target.checked;
+  const center = map.getCenter(); const zoom = map.getZoom();
+  map.setStyle(baseStyle(useOsm));
+  map.once("styledata", () => {
+    map.jumpTo({ center, zoom });
+    addLayersForSource("osm", OSM_COLOR);
+    addLayersForSource("overture", OVERTURE_COLOR);
+  });
+});
+</script>
+</body>
+</html>
