@@ -127,8 +127,13 @@
   </div>
 
   <div id="legend-hint">
-    Imagery: Esri World Imagery. Points are school / education places from each source.
-    Click a point for details.
+    Imagery: Esri World Imagery. Click a point for details.
+    <br><br><b>What the points are</b> - all are single points (one per school record), not building footprints:
+    <ul style="margin:5px 0 0;padding-left:16px">
+      <li><b>OpenStreetMap</b>: <code>amenity=school</code> - a hand-placed node, or the centroid of a school-grounds/building polygon.</li>
+      <li><b>Overture Maps</b>: <code>places</code> POIs (from commercial datasets) tagged school/education - so the "school" definition is looser.</li>
+    </ul>
+    Points are clipped to each country's admin-0 boundary. Counts are not de-duplicated across sources.
   </div>
 </div>
 
