@@ -284,7 +284,21 @@ async function loadCountry(iso) {
   loadingEl.style.display = "none";
 }
 
-map.on("load", () => loadCountry("NER"));
+function addBoundaries() {
+  map.addSource("borders", { type: "geojson", data: "data/country_boundaries.geojson" });
+  // Dark casing under a bright line so the border reads on any imagery.
+  map.addLayer({ id: "borders-casing", type: "line", source: "borders",
+    paint: { "line-color": "rgba(0,0,0,0.55)", "line-width": ["interpolate", ["linear"], ["zoom"], 3, 3, 8, 5] } });
+  map.addLayer({ id: "borders-line", type: "line", source: "borders",
+    paint: { "line-color": "#ffe066", "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2.2], "line-opacity": 0.95 } });
+  map.addSource("border-labels", { type: "geojson", data: "data/country_labels.geojson" });
+  map.addLayer({ id: "borders-label", type: "symbol", source: "border-labels",
+    layout: { "text-field": ["get", "name"], "text-size": ["interpolate", ["linear"], ["zoom"], 4, 13, 7, 20],
+      "text-transform": "uppercase", "text-letter-spacing": 0.15 },
+    paint: { "text-color": "#fff", "text-halo-color": "rgba(0,0,0,0.85)", "text-halo-width": 1.6, "text-opacity": 0.92 } });
+}
+
+map.on("load", () => { addBoundaries(); loadCountry("NER"); });
 
 document.getElementById("country-select").addEventListener("change", (e) => loadCountry(e.target.value));
 
